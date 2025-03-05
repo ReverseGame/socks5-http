@@ -3,7 +3,7 @@ use socks5_protocol::{self, handshake, Address, AsyncStreamOperation, AuthMethod
 use std::{net::SocketAddr, time::Duration};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 use error::Result;
-use crate::AuthAdaptor;
+use crate::socks5_server::AuthAdaptor;
 
 pub mod associate;
 pub mod bind;
@@ -18,7 +18,7 @@ pub struct IncomingConnection<O> {
 
 impl<O: 'static> IncomingConnection<O> {
     #[inline]
-    pub(crate) fn new(stream: TcpStream, auth: AuthAdaptor<O>) -> Self {
+    pub fn new(stream: TcpStream, auth: AuthAdaptor<O>) -> Self {
         IncomingConnection { stream, auth }
     }
 

@@ -1,0 +1,15 @@
+[package]
+name = "kafka"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-channel.workspace = true
+config.workspace = true
+tokio.workspace = true
+serde = { workspace = true, features = ["derive"] }
+uuid = { workspace = true, features = ["v4"] }
+serde_json.workspace = true
+rdkafka = { workspace = true, features = ["ssl", "sasl"] }
+error.workspace = true
+tracing.workspace = true

@@ -25,11 +25,38 @@ tower = "0.5.2"
 hyper-util = "0.1.10"
 tracing-subscriber = "0.3.19"
 tracing = "0.1.41"
+serde_json = "1"
+anyhow = "1"
+base64 = "0.22.1"
+strum = "0.27"
+strum_macros = "0.27"
+url = "2.3"
+dashmap = "6.1.0"
+async-channel = "2.3.1"
+lazy_static = "1.5.0"
+chrono = "0.4.40"
+futures = "0.3.31"
+serde_yaml = "0.9.33"
+rdkafka = "0.37"
+uuid = "1.15.1"
+regex = "1.11.1"
+tokio-tungstenite = "0.21"
+httparse = "1.10.1"
+trust-dns-resolver = { version = "0.23", features = ["tokio-runtime"] }
+
 error = { path = "crates/error" }
 socks5_protocol = { path = "crates/socks5_protocol"}
 http_impl = { path = "crates/http_impl" }
 socks5_client = { path = "crates/socks5_client" }
-
+rg-acl = { path = "crates/rg-acl" }
+rg-common = { path = "crates/rg-common" }
+rg-proxy = { path = "crates/rg-proxy" }
+rg-stat = { path = "crates/rg-stat" }
+rg-server-common = { path = "crates/rg-server-common" }
+socks5_http = { path = "crates/socks5_http"}
+args = { path = "crates/args" }
+kafka = { path = "crates/kafka" }
+config = { path = "crates/config" }
 #[dependencies]
 #as-any = "0.3"
 #async-trait = "0.1"

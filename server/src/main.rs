@@ -1,160 +1,107 @@
-// use {
-//     socks5_protocol::{Address, Reply, UdpHeader},
-//     server::{auth, connection::associate, AssociatedUdpSocket, ClientConnection, IncomingConnection, Server, UdpAssociate},
-//     Error, Result,
-// };
-// use std::{
-//     net::{SocketAddr, ToSocketAddrs},
-//     sync::{atomic::AtomicBool, Arc},
-// };
-// use tokio::{
-//     io,
-//     net::{TcpStream, UdpSocket},
-//     sync::Mutex,
-// };
-//
-// pub(crate) static MAX_UDP_RELAY_PACKET_SIZE: usize = 1500;
-//
-// #[tokio::main]
-// async fn main() -> Result<()> {
-//
-//
-//     Ok(())
-// }
-//
-// async fn main_loop(listen_addr: SocketAddr) -> Result<()>
-// {
-//     tokio::net::TcpListener::bind(listen_addr).await?.accept();
-//     let server = Server::bind(listen_addr, auth).await?;
-//
-//     while let Ok((conn, _)) = server.accept().await {
-//         if let Some(exiting_flag) = &exiting_flag {
-//             if exiting_flag.load(std::sync::atomic::Ordering::Relaxed) {
-//                 break;
-//             }
-//         }
-//         tokio::spawn(async move {
-//             if let Err(err) = handle(conn).await {
-//                 log::error!("{err}");
-//             }
-//         });
-//     }
-//     Ok(())
-// }
-//
-// async fn handle<S>(conn: IncomingConnection<S>) -> Result<()>
-// where
-//     S: Send + Sync + 'static,
-// {
-//     let (conn, res) = conn.authenticate().await?;
-//
-//     use as_any::AsAny;
-//     if let Some(res) = res.as_any().downcast_ref::<std::io::Result<bool>>() {
-//         let res = *res.as_ref().map_err(|err| err.to_string())?;
-//         if !res {
-//             log::info!("authentication failed");
-//             return Ok(());
-//         }
-//     }
-//
-//     match conn.wait_request().await? {
-//         ClientConnection::UdpAssociate(associate, _) => {
-//             handle_s5_upd_associate(associate).await?;
-//         }
-//         ClientConnection::Bind(bind, _) => {
-//             let mut conn = bind.reply(Reply::CommandNotSupported, Address::unspecified()).await?;
-//             conn.shutdown().await?;
-//         }
-//         ClientConnection::Connect(connect, addr) => {
-//             let target = match addr {
-//                 Address::DomainAddress(domain, port) => TcpStream::connect((domain, port)).await,
-//                 Address::SocketAddress(addr) => TcpStream::connect(addr).await,
-//             };
-//
-//             if let Ok(mut target) = target {
-//                 let mut conn = connect.reply(Reply::Succeeded, Address::unspecified()).await?;
-//                 log::trace!("{} -> {}", conn.peer_addr()?, target.peer_addr()?);
-//                 io::copy_bidirectional(&mut target, &mut conn).await?;
-//             } else {
-//                 let mut conn = connect.reply(Reply::HostUnreachable, Address::unspecified()).await?;
-//                 conn.shutdown().await?;
-//             }
-//         }
-//     }
-//
-//     Ok(())
-// }
-//
-// pub(crate) async fn handle_s5_upd_associate(associate: UdpAssociate<associate::NeedReply>) -> Result<()> {
-//     // listen on a random port
-//     let listen_ip = associate.local_addr()?.ip();
-//     let udp_listener = UdpSocket::bind(SocketAddr::from((listen_ip, 0))).await;
-//
-//     match udp_listener.and_then(|socket| socket.local_addr().map(|addr| (socket, addr))) {
-//         Err(err) => {
-//             let mut conn = associate.reply(Reply::GeneralFailure, Address::unspecified()).await?;
-//             conn.shutdown().await?;
-//             Err(err.into())
-//         }
-//         Ok((listen_udp, listen_addr)) => {
-//             log::info!("[UDP] {listen_addr} listen on");
-//
-//             let s5_listen_addr = Address::from(listen_addr);
-//             let mut reply_listener = associate.reply(Reply::Succeeded, s5_listen_addr).await?;
-//
-//             let buf_size = MAX_UDP_RELAY_PACKET_SIZE - UdpHeader::max_serialized_len();
-//             let listen_udp = Arc::new(AssociatedUdpSocket::from((listen_udp, buf_size)));
-//
-//             let zero_addr = SocketAddr::from(([0, 0, 0, 0], 0));
-//
-//             let incoming_addr = Arc::new(Mutex::new(zero_addr));
-//
-//             let dispatch_socket = UdpSocket::bind(zero_addr).await?;
-//
-//             let res = loop {
-//                 tokio::select! {
-//                     res = async {
-//                         let buf_size = MAX_UDP_RELAY_PACKET_SIZE - UdpHeader::max_serialized_len();
-//                         listen_udp.set_max_packet_size(buf_size);
-//
-//                         let (pkt, frag, dst_addr, src_addr) = listen_udp.recv_from().await?;
-//                         if frag != 0 {
-//                             return Err("[UDP] packet fragment is not supported".into());
-//                         }
-//
-//                         *incoming_addr.lock().await = src_addr;
-//
-//                         log::trace!("[UDP] {src_addr} -> {dst_addr} incoming packet size {}", pkt.len());
-//                         let dst_addr = dst_addr.to_socket_addrs()?.next().ok_or("Invalid address")?;
-//                         dispatch_socket.send_to(&pkt, dst_addr).await?;
-//                         Ok::<_, Error>(())
-//                     } => {
-//                         if res.is_err() {
-//                             break res;
-//                         }
-//                     },
-//                     res = async {
-//                         let mut buf = vec![0u8; MAX_UDP_RELAY_PACKET_SIZE];
-//                         let (len, remote_addr) = dispatch_socket.recv_from(&mut buf).await?;
-//                         let incoming_addr = *incoming_addr.lock().await;
-//                         log::trace!("[UDP] {incoming_addr} <- {remote_addr} feedback to incoming");
-//                         listen_udp.send_to(&buf[..len], 0, remote_addr.into(), incoming_addr).await?;
-//                         Ok::<_, Error>(())
-//                     } => {
-//                         if res.is_err() {
-//                             break res;
-//                         }
-//                     },
-//                     _ = reply_listener.wait_until_closed() => {
-//                         log::trace!("[UDP] {} listener closed", listen_addr);
-//                         break Ok::<_, Error>(());
-//                     },
-//                 };
-//             };
-//
-//             reply_listener.shutdown().await?;
-//
-//             res
-//         }
-//     }
-// }
+mod utils;
+mod server_client;
+mod emit_client;
+mod backend;
+
+use {
+    socks5_protocol::{Address, Reply, UdpHeader},
+    rg_proxy::socks5_server::{auth, connection::associate, AssociatedUdpSocket, ClientConnection, IncomingConnection, UdpAssociate},
+    error::{Error, Result},
+};
+use std::{
+    net::{SocketAddr, ToSocketAddrs},
+    sync::{atomic::AtomicBool, Arc},
+};
+use std::process::exit;
+use tokio::{
+    io,
+    net::{TcpStream, UdpSocket},
+    sync::Mutex,
+};
+use rg_acl::{acl::DefaultAclRule, auth::dc_auth::DcAuthenticator};
+use as_any::AsAny;
+use tokio::sync::RwLock;
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
+use rg_common::stat::StatType;
+use crate::utils::get_local_ip_port;
+use tracing::{info, error};
+use rg_proxy::backend::{CommonBackend, ServerBackend};
+use rg_proxy::backend::dc_server::{init, DcServerBackend, DC_SERVER_BACKEND};
+use strum::IntoEnumIterator;
+use rg_proxy::proxy_server::ProxyServer;
+use rg_proxy::Server;
+
+#[tokio::main(flavor = "multi_thread")]
+async fn main() -> Result<()> {
+    // a builder for `FmtSubscriber`.
+    let subscriber = FmtSubscriber::builder()
+        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+        // will be written to stdout.
+        .with_max_level(Level::TRACE)
+        // completes the builder.
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("setting default subscriber failed");
+
+    // create client first
+    let mut client =server_client::ServerClient::new().await;
+
+    let acl_center = Arc::new(RwLock::new(DefaultAclRule {}));
+    let auth_center = Arc::new(RwLock::new(DcAuthenticator::default()));
+
+    // create statistic manager
+    let (stat_sender, stat_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut stat_manager = rg_stat::StatisticManager::new(stat_receiver);
+
+    for stat_type in StatType::iter() {
+        let t = stat_manager.subscribe(stat_type);
+        client.add_subscribe(t).await;
+    }
+    init(stat_sender).await;
+    // create proxy server
+    // let dc_backend = DcServerBackend::new(CommonBackend::new(
+    //     auth_center.clone(),
+    //     acl_center.clone(),
+    //     stat_sender,
+    // ));
+
+    let kill_user_sender = DC_SERVER_BACKEND.init_kill_user_connection().await;
+    // start listening
+    // let backend = Arc::new(dc_backend);
+    let local_ip_ports = get_local_ip_port().await;
+    let mut servers = Vec::new();
+    for ip in local_ip_ports {
+        let listener = match tokio::net::TcpListener::bind(ip).await {
+            Ok(listener) => listener,
+            Err(e) => {
+                error!("fail to bind {}, error: {}", ip, e);
+                continue;
+            }
+        };
+        servers.push(ProxyServer::new(listener, DC_SERVER_BACKEND.clone()).await);
+    }
+
+    info!("start stat manager");
+    // start run
+    tokio::spawn(async move {
+        stat_manager.run().await;
+    });
+
+    info!("start run client");
+    tokio::spawn(async move {
+        client.run(auth_center, acl_center, kill_user_sender).await;
+    });
+
+    info!("start proxy server");
+    let mut handlers = Vec::new();
+    for server in servers {
+        let handler = tokio::spawn(async move {
+            server.start().await.expect("start server failed");
+        });
+        handlers.push(handler);
+    }
+    futures::future::join_all(handlers).await;
+    exit(0);
+}

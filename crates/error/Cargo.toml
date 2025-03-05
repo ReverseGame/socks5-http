@@ -4,5 +4,9 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
-thiserror = "2.0.9"
-tokio = "1.42.0"
+thiserror.workspace = true
+tokio.workspace = true
+http.workspace = true
+base64.workspace = true
+anyhow.workspace = true
+trust-dns-resolver.workspace = true

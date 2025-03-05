@@ -39,6 +39,28 @@ pub enum Error {
 
     #[error("{0}")]
     String(String),
+    #[error("InvalidUri: {0}")]
+    InvalidUri(#[from] http::uri::InvalidUri),
+
+    #[error("invalid auth header")]
+    InvalidAuthHeader,
+    #[error("DecodeError: {0}")]
+    DecodeError(#[from] base64::DecodeError),
+
+    #[error("Request body is empty")]
+    EmptyRequest,
+
+    #[error("anyhow error {0}")]
+    AnyhowError(#[from] anyhow::Error),
+
+    #[error("Auth fail: {0}")]
+    AuthFailed(String),
+
+    #[error("Forbidden request")]
+    ForbiddenRequest,
+
+    #[error("Resolve dns address error {0}")]
+    ResolveDnsError(#[from] trust_dns_resolver::error::ResolveError),
 }
 
 impl From<&str> for Error {

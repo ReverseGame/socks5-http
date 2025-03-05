@@ -6,9 +6,10 @@ use tokio::net::TcpListener;
 
 pub mod auth;
 pub mod connection;
-mod server_auth;
+pub mod server_auth;
+pub mod handle_conn;
 
-pub use crate::{auth::{AuthAdaptor, AuthExecutor},
+pub use crate::socks5_server::{auth::{AuthAdaptor, AuthExecutor},
                 connection::{
         associate::{AssociatedUdpSocket, UdpAssociate},
         bind::Bind,
@@ -25,7 +26,7 @@ pub use crate::{auth::{AuthAdaptor, AuthExecutor},
 /// [`AuthExecutor`] trait.
 pub struct Server<O> {
     listener: TcpListener,
-    auth: AuthAdaptor<O>,
+    pub auth: AuthAdaptor<O>,
 }
 
 impl<O: 'static> Server<O> {

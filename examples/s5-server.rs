@@ -1,5 +1,5 @@
-// use socks5_impl::{
-//     protocol::{Address, Reply, UdpHeader},
+// use {
+//     socks5_protocol::{Address, Reply, UdpHeader},
 //     server::{auth, connection::associate, AssociatedUdpSocket, ClientConnection, IncomingConnection, Server, UdpAssociate},
 //     Error, Result,
 // };

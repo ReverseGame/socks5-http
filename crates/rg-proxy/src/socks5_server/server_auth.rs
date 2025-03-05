@@ -1,13 +1,26 @@
 use async_trait::async_trait;
+use http::Uri;
 use tokio::net::TcpStream;
 use socks5_protocol::{AsyncStreamOperation, AuthMethod, UserKey};
 use socks5_protocol::password_method::{Request, Response};
 use socks5_protocol::password_method::Status::{Failed, Succeeded};
-use crate::AuthExecutor;
+use crate::socks5_server::AuthExecutor;
 use error::{Error, Result};
+use crate::backend::check_user_auth;
+use crate::backend::dc_server::DC_SERVER_BACKEND;
 
+#[derive(Debug, Default)]
 pub struct ServerAuth {
     is_white: bool,
+    local_ip: String,
+    host: Uri,
+    remote_ip: String,
+}
+
+impl ServerAuth {
+    pub fn new(is_white: bool, local_ip: String, remote_ip: String) -> Self {
+        Self { is_white, local_ip, host: Uri::default(), remote_ip }
+    }
 }
 
 #[async_trait]
@@ -29,10 +42,11 @@ impl AuthExecutor for ServerAuth {
             }
             AuthMethod::UserPass => {
                 let req = Request::retrieve_from_async_stream(stream).await?;
-                //  todo!()
-                let resp = Response::new(if is_equal { Succeeded } else { Failed });
+                let auth = DC_SERVER_BACKEND.auth.clone();
+                let (valid, user) = check_user_auth(&auth, &self.host.host().unwrap_or_default(), &self.local_ip, self.is_white, &req.user_key.username, &req.user_key.password).await?;
+                let resp = Response::new(if valid { Succeeded } else { Failed });
                 resp.write_to_async_stream(stream).await?;
-                if is_equal {
+                if valid {
                     Ok(true)
                 } else {
                     Err(Error::from(std::io::Error::new(std::io::ErrorKind::Other, "username or password is incorrect")))
